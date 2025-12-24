@@ -28,77 +28,53 @@ const RelativisticShaderMaterial = shaderMaterial(
     void main() {
       vUv = uv;
       
-      // 1. Calculate Gamma (Lorentz Factor)
-      // gamma = 1 / sqrt(1 - v^2)
+      // 1. Calculate Gamma
       float betaSq = dot(velocity, velocity);
-      
-      // Safety check to prevent division by zero or imaginary numbers if v >= c
-      // In a game, we clamp betaSq to 0.999
       betaSq = min(betaSq, 0.999);
       float gamma = 1.0 / sqrt(1.0 - betaSq);
 
-      // 2. Perform Lorentz Contraction
-      // We contract spatial dimensions ALONG the direction of velocity.
-      // p' = p + (gamma - 1)(p . n)n  <-- Inverse transformation usually? 
-      // Wait, if observer moves, the world "contracts".
-      // Formula: p_parallel' = p_parallel / gamma
-      // p_New = p_perp + p_parallel / gamma
+      // 2. Transfrom to WORLD SPACE first
+      // We want to contract the entire world, not just the local mesh.
+      vec4 worldPosEx = modelMatrix * vec4(position, 1.0);
+      vec3 worldPos = worldPosEx.xyz;
       
-      vec3 pos = position;
+      // 3. Perform Lorentz Contraction (in World Space)
       float vMag = length(velocity);
-      
       if (vMag > 0.001) {
           vec3 n = normalize(velocity);
-          float pParallelMag = dot(pos, n);
+          
+          // Project world position onto velocity vector
+          float pParallelMag = dot(worldPos, n);
           vec3 pParallel = pParallelMag * n;
-          vec3 pPerp = pos - pParallel;
+          vec3 pPerp = worldPos - pParallel;
           
-
-          // Apply contraction
-          // Length L appears shorter (L/gamma).
-          pos = pPerp + (pParallel / gamma);
+          // Contract
+          worldPos = pPerp + (pParallel / gamma);
           
-          // 3. Relativistic Aberration (Searchlight Effect)
-          // The previous step (Contraction) handles the "World" geometry.
-          // But "Vision" depends on the angle of light rays.
-          // cos(theta') = (cos(theta) - beta) / (1 - beta * cos(theta))
-          // This effectively "warps" the X/Y coordinates towards the center (Z).
+          // Aberration (Scale X/Y in World Space)
+          // We must be careful. If we warp World Space X/Y towards 0, 
+          // we are warping towards World Origin (0,0,0).
+          // This assumes the camera is at 0,0,0.
+          // Since our Camera IS at 0,0,0 in this game (tunnel moves), this works!
           
-          // Simplified Visual Warp:
-          // We squash X and Y towards the center as Z distance increases?
-          // Actually, aberration makes the FOV wider. Objects at the side move to the front.
-          // In a Vertex Shader, this looks like expanding X/Y based on Z?
-          // Let's apply a non-linear scale to X/Y based on how "forward" the vertex is.
+          // Apply inverse gamma scale to perpendicular components relative to view direction?
+          // Approximate with standard XYZ scaling
+          // Actually, since we aligned 'n' with Z-axis mostly:
+          // We can just find the component perpendicular to n and scale it?
+          // We already have pPerp.
           
-          // If we move +Z:
-          // Objects in front stay in front.
-          // Objects at 90 deg (X/Y) move forward (appear at < 90 deg).
-          // This means they effectively move "inwards" in the view? No, they move "forward" in the world.
+          // Simple Aberration: Expand pPerp by gamma? 
+          // No, shrink it by gamma?
+          // Earlier we did pos.x /= gamma.
+          // Let's modify pPerp directly.
           
-          // Implementation: 
-          // We rotate the vertex P towards the velocity axis N.
-          // This is complex in Vertex Shader without raytracing.
-          // Approximation: Scale pPerp by 1/gamma? (Penrose-Terrell rotation results in this)
-          // For a sphere, it effectively rotates. For a tunnel?
-          
-          // Let's apply the Inverse Lorentz Transf to the VIEW vector??
-          // No, let's just scale pPerp (X/Y) by 1.0/gamma as well?
-          // If we do that, the whole tunnel shrinks in XY.
-          
-          // Correct Aberration for a Rasterizer:
-          // We can't easily do ray-bending per vertex without distorting geometry bad.
-          // BUT, we can hack it: Scale XY by 1/Gamma.
-          // Contraction squashed Z.
-          // If we also squash XY, the tunnel gets narrow.
-          // User asked: "Shouldn't distortions happen in X?"
-          // Relativistic Aberration essentially "Zoom's out".
-          // Let's try scaling X/Y by 1/Gamma to see if it gives the "Warp" effect.
-          pos.x = pos.x / gamma;
-          pos.y = pos.y / gamma;
+          // Note: pPerp contains the world X and Y coordinates (if v is Z).
+          // So scaling pPerp scales the tunnel radius.
+           worldPos = (pPerp / gamma) + (pParallel / gamma);
       }
 
-      // 4. Output position
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      // 4. Output position (Use View and Projection on the Modified World Pos)
+      gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
       
       // 4. Calculate Doppler Factor for Fragment Shader
       // D = sqrt((1+beta)/(1-beta)) is for 1D.
@@ -136,9 +112,7 @@ const RelativisticShaderMaterial = shaderMaterial(
           shiftedColor.g *= (vDopplerFactor * 0.5);
       } else {
           // Red shift
-          shiftedColor.r /= vDopplerFactor; // Division because factor < 1 makes it huge? No.
-          // if factor is 0.5 (red shift), we want R to increase? 
-          // Actually standard logic: Frequency decreases. Red is low freq.
+          shiftedColor.r /= vDopplerFactor; 
           // Visualizing this: Mix with Red.
           shiftedColor.r += (1.0 - vDopplerFactor);
           shiftedColor.b *= vDopplerFactor;

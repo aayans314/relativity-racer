@@ -39,7 +39,29 @@ We wrote a custom shader `RelativisticShaderMaterial.tsx`.
 Doing this on CPU (Javascript) would require looping over 10,000 vertices every frame (60fps). That kills the browser.
 Doing it on GPU (Shader) is free. It happens parallel to the drawing process.
 
-## Entry 3: Trust but Verify (Unit Testing)
+### 2. The Result
+All tests passed. We now have a "Green Build".
+This is critical for the "Startup" quality the user requested. No serious deep-tech product ships without automated tests.
+
+## Entry 4: The Need for Speed (Player Controller)
+**Date**: 2025-12-24
+
+### 1. The "What": Input Handling
+We built a `PlayerController` that acts as the "Driver" of our relativistic ship.
+*   **Thrust (W/S)**: Increases `velocity.z`.
+*   **Steer (A/D)**: Changes `velocity.x`.
+
+### 2. The "How": Physics
+We implemented a simple drag/acceleration model.
+*   `accel = 0.5 * dt`
+*   `drag = 0.98`
+Critical: We **Clamp** the velocity at `0.995c`.
+If we let `v >= c`, the Gamma factor (`1/sqrt(1-v^2)`) divides by zero (or negative), crashing the shader.
+
+### 3. The Tunnel Connection
+The Controller doesn't move the *Camera*. It tells the *Tunnel* how fast to move backwards.
+This is the **Theory of Relativity** in action: "Am I moving forward, or is the universe moving backward?" Mathematically, it's identical.
+
 **Date**: 2025-12-24
 
 ### 1. The "What": Testing Physics
