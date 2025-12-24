@@ -76,7 +76,8 @@ export function Tunnel({ speed }: { speed: number }) {
             {initialPositions.map((pos) => (
                 <mesh key={pos.id} position={[0, 0, pos.z]} rotation={[Math.PI / 2, 0, 0]}>
                     {/* Cylinder aligned to Z now */}
-                    <cylinderGeometry args={[5, 5, SEGMENT_LENGTH, 16, 1, true]} />
+                    {/* Increased segments to create a proper 'grid' look instead of just rings */}
+                    <cylinderGeometry args={[5, 5, SEGMENT_LENGTH, 24, 10, true]} />
                     <relativisticShaderMaterial
                         side={THREE.DoubleSide}
                         color={new THREE.Color(0.2, 0.2 + (pos.id / SEGMENTS) * 0.5, 0.8)} // Gradient color

@@ -14,13 +14,13 @@ import * as THREE from 'three'
  * Fragment Shader: Relativistic Doppler Shift (Redshift/Blueshift).
  */
 const RelativisticShaderMaterial = shaderMaterial(
-    {
-        time: 0,
-        color: new THREE.Color(0.2, 0.5, 1.0),
-        velocity: new THREE.Vector3(0, 0, 0), // v/c
-    },
-    // Vertex Shader
-    `
+  {
+    time: 0,
+    color: new THREE.Color(0.2, 0.5, 1.0),
+    velocity: new THREE.Vector3(0, 0, 0), // v/c
+  },
+  // Vertex Shader
+  `
     varying vec2 vUv;
     varying float vDopplerFactor;
     uniform vec3 velocity;
@@ -53,12 +53,51 @@ const RelativisticShaderMaterial = shaderMaterial(
           vec3 pParallel = pParallelMag * n;
           vec3 pPerp = pos - pParallel;
           
+
           // Apply contraction
           // Length L appears shorter (L/gamma).
           pos = pPerp + (pParallel / gamma);
+          
+          // 3. Relativistic Aberration (Searchlight Effect)
+          // The previous step (Contraction) handles the "World" geometry.
+          // But "Vision" depends on the angle of light rays.
+          // cos(theta') = (cos(theta) - beta) / (1 - beta * cos(theta))
+          // This effectively "warps" the X/Y coordinates towards the center (Z).
+          
+          // Simplified Visual Warp:
+          // We squash X and Y towards the center as Z distance increases?
+          // Actually, aberration makes the FOV wider. Objects at the side move to the front.
+          // In a Vertex Shader, this looks like expanding X/Y based on Z?
+          // Let's apply a non-linear scale to X/Y based on how "forward" the vertex is.
+          
+          // If we move +Z:
+          // Objects in front stay in front.
+          // Objects at 90 deg (X/Y) move forward (appear at < 90 deg).
+          // This means they effectively move "inwards" in the view? No, they move "forward" in the world.
+          
+          // Implementation: 
+          // We rotate the vertex P towards the velocity axis N.
+          // This is complex in Vertex Shader without raytracing.
+          // Approximation: Scale pPerp by 1/gamma? (Penrose-Terrell rotation results in this)
+          // For a sphere, it effectively rotates. For a tunnel?
+          
+          // Let's apply the Inverse Lorentz Transf to the VIEW vector??
+          // No, let's just scale pPerp (X/Y) by 1.0/gamma as well?
+          // If we do that, the whole tunnel shrinks in XY.
+          
+          // Correct Aberration for a Rasterizer:
+          // We can't easily do ray-bending per vertex without distorting geometry bad.
+          // BUT, we can hack it: Scale XY by 1/Gamma.
+          // Contraction squashed Z.
+          // If we also squash XY, the tunnel gets narrow.
+          // User asked: "Shouldn't distortions happen in X?"
+          // Relativistic Aberration essentially "Zoom's out".
+          // Let's try scaling X/Y by 1/Gamma to see if it gives the "Warp" effect.
+          pos.x = pos.x / gamma;
+          pos.y = pos.y / gamma;
       }
 
-      // 3. Output position
+      // 4. Output position
       gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       
       // 4. Calculate Doppler Factor for Fragment Shader
@@ -77,8 +116,8 @@ const RelativisticShaderMaterial = shaderMaterial(
       vDopplerFactor = sqrt((1.0 - betaZ) / (1.0 + betaZ)); // Inverse?
     }
   `,
-    // Fragment Shader
-    `
+  // Fragment Shader
+  `
     uniform vec3 color;
     varying vec2 vUv;
     varying float vDopplerFactor;
