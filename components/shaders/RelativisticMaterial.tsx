@@ -33,48 +33,31 @@ const RelativisticShaderMaterial = shaderMaterial(
       betaSq = min(betaSq, 0.999);
       float gamma = 1.0 / sqrt(1.0 - betaSq);
 
-      // 2. Transfrom to WORLD SPACE first
-      // We want to contract the entire world, not just the local mesh.
-      vec4 worldPosEx = modelMatrix * vec4(position, 1.0);
-      vec3 worldPos = worldPosEx.xyz;
+      // 2. Perform Lorentz Contraction (Local Space)
+      // Reverting to Local Space to avoid "dense center" artifacts.
+      // This will cause gaps between segments ("chunks"), but the user preferred this.
       
-      // 3. Perform Lorentz Contraction (in World Space)
+      vec3 pos = position;
       float vMag = length(velocity);
+      
       if (vMag > 0.001) {
           vec3 n = normalize(velocity);
-          
-          // Project world position onto velocity vector
-          float pParallelMag = dot(worldPos, n);
+          float pParallelMag = dot(pos, n);
           vec3 pParallel = pParallelMag * n;
-          vec3 pPerp = worldPos - pParallel;
+          vec3 pPerp = pos - pParallel;
           
-          // Contract
-          worldPos = pPerp + (pParallel / gamma);
+          // Apply contraction
+          pos = pPerp + (pParallel / gamma);
           
-          // Aberration (Scale X/Y in World Space)
-          // We must be careful. If we warp World Space X/Y towards 0, 
-          // we are warping towards World Origin (0,0,0).
-          // This assumes the camera is at 0,0,0.
-          // Since our Camera IS at 0,0,0 in this game (tunnel moves), this works!
-          
-          // Apply inverse gamma scale to perpendicular components relative to view direction?
-          // Approximate with standard XYZ scaling
-          // Actually, since we aligned 'n' with Z-axis mostly:
-          // We can just find the component perpendicular to n and scale it?
-          // We already have pPerp.
-          
-          // Simple Aberration: Expand pPerp by gamma? 
-          // No, shrink it by gamma?
-          // Earlier we did pos.x /= gamma.
-          // Let's modify pPerp directly.
-          
-          // Note: pPerp contains the world X and Y coordinates (if v is Z).
-          // So scaling pPerp scales the tunnel radius.
-           worldPos = (pPerp / gamma) + (pParallel / gamma);
+          // Aberration (Simple XY scaling)
+          // We apply the same visual warp as before: 
+          // Scale X/Y by 1/gamma to simulate FOV widening.
+          pos.x = pos.x / gamma;
+          pos.y = pos.y / gamma;
       }
 
-      // 4. Output position (Use View and Projection on the Modified World Pos)
-      gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
+      // 3. Output position
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       
       // 4. Calculate Doppler Factor for Fragment Shader
       // D = sqrt((1+beta)/(1-beta)) is for 1D.
